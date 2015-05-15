@@ -11,6 +11,7 @@ import Queue
 import re
 import time
 from lib.parser import parse
+import random
 
 
 if len(sys.argv) == 1:
@@ -33,6 +34,9 @@ class Scanner(object):
         if not os.path.exists(self.domain):
             os.mkdir(self.domain)
         print '[+] Download and parse index file ...'
+#        proxy_handle = urllib2.ProxyHandler({"http":'218.78.210.190:8080'})
+#        opener = urllib2.build_opener(proxy_handle)
+#        urllib2.install_opener(opener)
         data = urllib2.urlopen(sys.argv[-1] + '/index').read()
         with open('index', 'wb') as f:
             f.write(data)
@@ -43,6 +47,20 @@ class Scanner(object):
         self.lock = threading.Lock()
         self.thread_count = 20
         self.STOP_ME = False
+        self.proxys = []
+        try:
+            with open('proxy_ok.txt', 'r') as fd_proxy:
+                for line in fd_proxy:
+                    if line and line.strip():
+                        if line.strip().endswith(":443"):
+                            proxy = {line.strip():'https'}
+                        else:
+                            proxy = {line.strip():'http'}
+                        print 'proxy',proxy
+                        self.proxys.append(proxy)
+        except Exception,e:
+            print 'error',e
+            
 
     def get_back_file(self):
         while not self.STOP_ME:
@@ -53,7 +71,10 @@ class Scanner(object):
             for i in range(3):
                 try:
                     folder = '/objects/%s/' % sha1[:2]
-                    data = urllib2.urlopen(self.base_url + folder + sha1[2:]).read()
+                    proxy_handle = urllib2.ProxyHandler(random.choice(self.proxys))
+                    opener = urllib2.build_opener(proxy_handle)
+                    data = opener.open(self.base_url + folder + sha1[2:]).read()
+#                    data = urllib2.urlopen(self.base_url + folder + sha1[2:]).read()
                     data = zlib.decompress(data)
                     data = re.sub('blob \d+\00', '', data)
                     target_dir = os.path.join(self.domain, os.path.dirname(file_name) )
@@ -83,6 +104,7 @@ class Scanner(object):
 
 
 s = Scanner()
+print 'start'
 s.scan()
 try:
     while s.thread_count > 0:
